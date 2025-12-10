@@ -5,7 +5,7 @@ import { generateEmbedding } from '@/app/lib/embeddingClient';
 import { getOrCreateSessionId } from '@/app/lib/session';
 import { addMessage } from '@/app/lib/chatStore';
 import { getRelevantMessages } from '@/app/lib/semanticSearch';
-import type { ChatRequest, ChatResponse, ChatMessage } from '@/app/lib/types';
+import type { ChatRequest, ChatMessage } from '@/app/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,31 +23,15 @@ export async function POST(request: NextRequest) {
     const { message } = body as Partial<ChatRequest>;
 
     // Validate message field
-    if (!message) {
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Message is required' },
+        { error: 'Message is required and must be a non-empty string' },
         { status: 400 }
       );
     }
 
-    if (typeof message !== 'string') {
-      return NextResponse.json(
-        { error: 'Message must be a string' },
-        { status: 400 }
-      );
-    }
-
-    if (message.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Message cannot be empty' },
-        { status: 400 }
-      );
-    }
-
-    // Create temporary response to capture session cookie
+    // Create temporary response to capture session cookie logic
     const tempResponse = NextResponse.json({}, { status: 200 });
-
-    // Establish or retrieve session
     const sessionId = getOrCreateSessionId(request, tempResponse);
 
     // Add the user's message to database
@@ -57,21 +41,17 @@ export async function POST(request: NextRequest) {
     };
     await addMessage(sessionId, userMessage);
 
-    // Generate embedding for the current user message
+    // Generate embedding and build context (Keep existing logic)
     let queryEmbedding: number[] | null = null;
     try {
       queryEmbedding = await generateEmbedding(message);
     } catch (error) {
-      // Continue without semantic search if embedding fails
       queryEmbedding = null;
     }
 
-    // Build context prompt using semantic search
     let contextPrompt = '';
-
     if (queryEmbedding) {
       const relevantMessages = await getRelevantMessages(sessionId, queryEmbedding, 5);
-
       if (relevantMessages.length > 0) {
         contextPrompt += 'Relevant conversation context:\n\n';
         for (const msg of relevantMessages) {
@@ -81,25 +61,45 @@ export async function POST(request: NextRequest) {
         contextPrompt += '\n';
       }
     }
-
     contextPrompt += `Current user message:\n${message}`;
 
-    // Call the LLM client with context
-    const assistantMessage = await generateLLMResponse(contextPrompt);
+    // Create a streaming response
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let fullAssistantMessage = '';
 
-    // Store the assistant reply in database
-    const assistantMsg: ChatMessage = {
-      role: 'assistant',
-      content: assistantMessage,
-    };
-    await addMessage(sessionId, assistantMsg);
+        try {
+          // Call the streaming LLM client
+          const generator = generateLLMResponse(contextPrompt);
 
-    // Return the response with session cookie preserved
-    const response: ChatResponse = {
-      assistantMessage,
-    };
+          for await (const chunk of generator) {
+            fullAssistantMessage += chunk;
+            controller.enqueue(encoder.encode(chunk));
+          }
 
-    const finalResponse = NextResponse.json(response, { status: 200 });
+          // Once stream is finished, save the full message to the database
+          const assistantMsg: ChatMessage = {
+            role: 'assistant',
+            content: fullAssistantMessage,
+          };
+          await addMessage(sessionId, assistantMsg);
+
+          controller.close();
+        } catch (error) {
+          console.error('Error during streaming:', error);
+          controller.error(error);
+        }
+      },
+    });
+
+    // Return the stream
+    const finalResponse = new NextResponse(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
+      },
+    });
 
     // Copy session cookie from temp response to final response
     const sessionCookie = tempResponse.cookies.get('gpt_session_id');
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     return finalResponse;
 
   } catch (error) {
-    // Handle internal errors
+    console.error('Internal server error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

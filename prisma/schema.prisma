@@ -16,9 +16,20 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id        String        @id @default(cuid())
+  email     String        @unique
+  // Add other user fields here (e.g., password, name) as needed
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  sessions  ChatSession[]
+}
+
 model ChatSession {
   id        String    @id
   createdAt DateTime  @default(now())
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id])
   messages  Message[]
 }
 

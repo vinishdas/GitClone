@@ -1,27 +1,25 @@
+// src/app/lib/llmClient.ts
+
 /**
- * LLM Client for generating text responses using Google's Gemini API.
- * This module provides a simple interface to send prompts and receive text responses.
+ * LLM Client for generating streaming text responses using Google's Gemini API.
  */
 
 /**
- * Generates a text response from the Gemini API given a prompt.
- * 
- * @param prompt - The text prompt to send to the LLM
- * @returns A string containing the generated response
- * @throws Error if the API key is missing, the request fails, or the response is empty
+ * Generates a streaming text response from the Gemini API given a prompt.
+ * * @param prompt - The text prompt to send to the LLM
+ * @returns An AsyncGenerator that yields chunks of the generated text
+ * @throws Error if the API key is missing or the request fails
  */
-export async function generateLLMResponse(prompt: string): Promise<string> {
-  // Validate that the API key is present
+export async function* generateLLMResponse(prompt: string): AsyncGenerator<string, void, unknown> {
   const apiKey = process.env.GEMINI_API_KEY;
   
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY environment variable is not set');
   }
 
-  // Construct the Gemini API endpoint
-  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  // Use streamGenerateContent with alt=sse for Server-Sent Events
+  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse';
   
-  // Build the request payload following Gemini API structure
   const payload = {
     contents: [
       {
@@ -34,40 +32,58 @@ export async function generateLLMResponse(prompt: string): Promise<string> {
     ]
   };
 
+  const response = await fetch(`${endpoint}&key=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API request failed with status ${response.status}: ${errorText}`);
+  }
+
+  if (!response.body) {
+    throw new Error('No response body received from Gemini API');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
   try {
-    // Make the API request using fetch
-    const response = await fetch(`${endpoint}?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    // Check if the response was successful
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Gemini API request failed with status ${response.status}: ${errorText}`);
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      
+      // Keep the last line in the buffer if it's incomplete
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine.startsWith('data: ')) continue;
+
+        const jsonStr = trimmedLine.slice(6); // Remove 'data: ' prefix
+        if (jsonStr === '[DONE]') continue;
+
+        try {
+          const data = JSON.parse(jsonStr);
+          const textChunk = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          
+          if (textChunk) {
+            yield textChunk;
+          }
+        } catch (e) {
+          console.error('Error parsing streaming JSON:', e);
+        }
+      }
     }
-
-    // Parse the JSON response
-    const data = await response.json();
-
-    // Extract the text from the response structure
-    const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    // Validate that we received content
-    if (!generatedText) {
-      throw new Error('No content received from Gemini API');
-    }
-
-    return generatedText;
-
-  } catch (error) {
-    // Re-throw errors with additional context
-    if (error instanceof Error) {
-      throw new Error(`Failed to generate LLM response: ${error.message}`);
-    }
-    throw new Error('Failed to generate LLM response: Unknown error');
+  } finally {
+    reader.releaseLock();
   }
 }
