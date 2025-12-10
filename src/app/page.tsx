@@ -1,7 +1,7 @@
 export default function Home() {
   return (
     <main className="min-h-screen flex items-center justify-center">
-      <h1 className="text-2xl font-semibold">GPT Clone</h1>
+      <h1 className="text-3xl font-semibold font-mono  ">GPT Clone</h1>
       
 
     </main>
