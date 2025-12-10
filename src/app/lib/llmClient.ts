@@ -18,7 +18,7 @@ export async function* generateLLMResponse(prompt: string): AsyncGenerator<strin
   }
 
   // Use streamGenerateContent with alt=sse for Server-Sent Events
-  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse';
+  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse';
   
   const payload = {
     contents: [

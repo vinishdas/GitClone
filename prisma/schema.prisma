@@ -1,9 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+ 
 
 // prisma/schema.prisma
 // prisma/schema.prisma
@@ -14,12 +9,13 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
   id        String        @id @default(cuid())
   email     String        @unique
-  // Add other user fields here (e.g., password, name) as needed
+  password  String        // Added password field
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   sessions  ChatSession[]
@@ -28,18 +24,20 @@ model User {
 model ChatSession {
   id        String    @id
   createdAt DateTime  @default(now())
+  
   userId    String?
   user      User?     @relation(fields: [userId], references: [id])
+  
   messages  Message[]
 }
 
 model Message {
-  id        String      @id @default(cuid())
+  id        String                    @id @default(cuid())
   sessionId String
   role      String
   content   String
   embedding Unsupported("vector(768)")?
-  createdAt DateTime    @default(now())
+  createdAt DateTime                  @default(now())
 
   session   ChatSession @relation(fields: [sessionId], references: [id])
 }

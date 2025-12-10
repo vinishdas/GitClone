@@ -1,123 +1,123 @@
-// src/app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { generateLLMResponse } from '@/app/lib/llmClient';
-import { generateEmbedding } from '@/app/lib/embeddingClient';
-import { getOrCreateSessionId } from '@/app/lib/session';
-import { addMessage } from '@/app/lib/chatStore';
-import { getRelevantMessages } from '@/app/lib/semanticSearch';
+// REMOVED: import { getOrCreateSessionId } from '@/app/lib/session'; 
+import { addMessage, getRecentMessages } from '@/app/lib/chatStore';
+import { verifyToken } from '@/app/lib/jwt';
+import { prisma } from '@/app/lib/prisma';
 import type { ChatRequest, ChatMessage } from '@/app/lib/types';
+import { checkRateLimit } from '@/app/lib/rateLimitStore';
+
+interface ChatRequestBody {
+  message: string;
+  sessionId?: string;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse the request body
-    const body: unknown = await request.json();
+    const body = (await request.json()) as ChatRequestBody;
+    const { message, sessionId: requestedSessionId } = body;
 
-    // Validate the request structure
-    if (!body || typeof body !== 'object') {
+    // --- RATE LIMIT CHECK ---
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
+    // Use IP for rate limiting if it's a new chat
+    const rateLimitKey = requestedSessionId || ip;
+
+    if (!checkRateLimit(rateLimitKey)) {
       return NextResponse.json(
-        { error: 'Invalid request body' },
-        { status: 400 }
+        { error: 'You are sending messages too fast. Please wait a moment.' }, 
+        { status: 429 }
       );
     }
+    // ------------------------
 
-    const { message } = body as Partial<ChatRequest>;
+    if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 });
 
-    // Validate message field
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Message is required and must be a non-empty string' },
-        { status: 400 }
-      );
-    }
-
-    // Create temporary response to capture session cookie logic
     const tempResponse = NextResponse.json({}, { status: 200 });
-    const sessionId = getOrCreateSessionId(request, tempResponse);
-
-    // Add the user's message to database
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: message,
-    };
-    await addMessage(sessionId, userMessage);
-
-    // Generate embedding and build context (Keep existing logic)
-    let queryEmbedding: number[] | null = null;
-    try {
-      queryEmbedding = await generateEmbedding(message);
-    } catch (error) {
-      queryEmbedding = null;
+    let sessionId = requestedSessionId;
+    let userId: string | null = null;
+    
+    // Check Auth
+    const authToken = request.cookies.get('auth_token')?.value;
+    if (authToken) {
+      const payload = verifyToken(authToken);
+      if (payload) userId = payload.userId;
     }
 
-    let contextPrompt = '';
-    if (queryEmbedding) {
-      const relevantMessages = await getRelevantMessages(sessionId, queryEmbedding, 5);
-      if (relevantMessages.length > 0) {
-        contextPrompt += 'Relevant conversation context:\n\n';
-        for (const msg of relevantMessages) {
-          const roleLabel = msg.role === 'user' ? 'User' : 'Assistant';
-          contextPrompt += `${roleLabel}: ${msg.content}\n`;
-        }
-        contextPrompt += '\n';
-      }
+    // [!code change] FORCE NEW SESSION LOGIC
+    // If the frontend didn't send a Session ID (User clicked "New Chat"),
+    // we MUST generate a fresh one. We do NOT look at the old cookie.
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
     }
-    contextPrompt += `Current user message:\n${message}`;
 
-    // Create a streaming response
-    const stream = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder();
-        let fullAssistantMessage = '';
-
-        try {
-          // Call the streaming LLM client
-          const generator = generateLLMResponse(contextPrompt);
-
-          for await (const chunk of generator) {
-            fullAssistantMessage += chunk;
-            controller.enqueue(encoder.encode(chunk));
-          }
-
-          // Once stream is finished, save the full message to the database
-          const assistantMsg: ChatMessage = {
-            role: 'assistant',
-            content: fullAssistantMessage,
-          };
-          await addMessage(sessionId, assistantMsg);
-
-          controller.close();
-        } catch (error) {
-          console.error('Error during streaming:', error);
-          controller.error(error);
-        }
-      },
-    });
-
-    // Return the stream
-    const finalResponse = new NextResponse(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
-      },
-    });
-
-    // Copy session cookie from temp response to final response
-    const sessionCookie = tempResponse.cookies.get('gpt_session_id');
-    if (sessionCookie) {
-      finalResponse.cookies.set('gpt_session_id', sessionCookie.value, {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
+    // Link session to user if logged in
+    if (userId) {
+      await prisma.chatSession.upsert({
+        where: { id: sessionId },
+        create: { id: sessionId, userId },
+        update: { userId }, 
+      });
+    } else {
+      // For anonymous users, we still need to create the session record 
+      // so we can attach messages to it in the DB
+      await prisma.chatSession.upsert({
+        where: { id: sessionId },
+        create: { id: sessionId }, // No userId
+        update: {}, 
       });
     }
 
-    return finalResponse;
+    // 2. Save User Message
+    await addMessage(sessionId, { role: 'user', content: message });
 
-  } catch (error) {
-    console.error('Internal server error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    // 3. Build Context (Only Last 2 Messages + Current)
+    const recentHistory = await getRecentMessages(sessionId, 2);
+    
+    const systemPrompt = `You are a helpful blog-writing assistant. Answer the user's question in a detailed, structured format (like a mini-blog post) using Markdown.`;
+    const contextString = recentHistory.map(m => `${m.role}: ${m.content}`).join('\n');
+    const finalPrompt = `${systemPrompt}\n\nRecent Context:\n${contextString}\n\nUser: ${message}\nAssistant:`;
+
+    // 4. Stream Response
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        try {
+          const generator = generateLLMResponse(finalPrompt);
+          let fullResponse = '';
+
+          for await (const chunk of generator) {
+            fullResponse += chunk;
+            controller.enqueue(encoder.encode(chunk));
+          }
+
+          // 5. Save AI Response
+          await addMessage(sessionId!, { role: 'assistant', content: fullResponse });
+          controller.close();
+        } catch (e) {
+          controller.error(e);
+        }
+      },
+    });
+
+    const response = new NextResponse(stream, {
+      headers: { 
+        'Content-Type': 'text/plain; charset=utf-8', 
+        'x-session-id': sessionId // Send new ID back to frontend
+      }
+    });
+
+    // [!code change] Always update the cookie to the CURRENT session
+    // This ensures if they refresh, they stay in *this* new room
+    response.cookies.set('gpt_session_id', sessionId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+    });
+
+    return response;
+
+  }  catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: 'Server Error' }, { status: 500 });
   }
 }
