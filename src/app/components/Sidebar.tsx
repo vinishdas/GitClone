@@ -1,8 +1,10 @@
+// src/app/components/Sidebar.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, LogOut } from 'lucide-react'; // Import LogOut icon
+import { useRouter } from 'next/navigation'; // Import useRouter for redirection
 
 interface HistoryItem {
   id: string;
@@ -20,6 +22,7 @@ interface SidebarProps {
 
 export function Sidebar({ onSelectSession, onNewChat, currentSessionId, isOpen = true, onClose }: SidebarProps) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const router = useRouter(); // Initialize router
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -37,29 +40,13 @@ export function Sidebar({ onSelectSession, onNewChat, currentSessionId, isOpen =
     fetchHistory();
   }, [currentSessionId]);
 
-//   const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
-//     e.stopPropagation(); 
-//     if (!confirm('Delete this chat?')) return;
-
-//     try {
-//       await fetch(`/api/chat/${sessionId}`, { method: 'DELETE' });
-//       setHistory(prev => prev.filter(item => item.id !== sessionId));
-//       if (currentSessionId === sessionId) {
-//         onNewChat();
-//       }
-//     } catch (err) {
-//       console.error(err);
-//     }
-//   };
-
-const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
+  const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation(); 
     if (!confirm('Delete this chat?')) return;
 
     try {
       const res = await fetch(`/api/chat/${sessionId}`, { method: 'DELETE' });
       
-      // [!code ++] Only remove from UI if server deletion succeeded
       if (!res.ok) {
         throw new Error('Failed to delete chat');
       }
@@ -70,7 +57,18 @@ const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
       }
     } catch (err) {
       console.error(err);
-      alert('Could not delete chat. Please try again.'); // [!code ++] Feedback to user
+      alert('Could not delete chat. Please try again.');
+    }
+  };
+
+  // Handle Logout Function
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login'); 
+      router.refresh(); 
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
   };
 
@@ -176,6 +174,18 @@ const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
               </div>
             )}
           </div>
+
+          {/* Logout Button */}
+          <div className="p-3 sm:p-4 border-t border-gray-200 mt-auto bg-gray-50/50">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-start gap-3 py-2.5 px-3 sm:px-4 rounded-lg text-sm sm:text-base font-medium text-gray-600 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
+            >
+              <LogOut size={18} className="sm:w-5 sm:h-5" strokeWidth={2} />
+              <span>Log out</span>
+            </button>
+          </div>
+
         </div>
       </div>
     </>

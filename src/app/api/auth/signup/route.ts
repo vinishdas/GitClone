@@ -3,6 +3,8 @@ import { prisma } from '@/app/lib/prisma';
 import { hashPassword } from '@/app/lib/auth';
 import { z } from 'zod';
 
+
+
 const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),

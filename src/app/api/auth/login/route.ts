@@ -3,11 +3,13 @@ import { prisma } from '@/app/lib/prisma';
 import { comparePassword, signToken } from '@/app/lib/auth';
 import { z } from 'zod';
 
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
 });
 
+ 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

@@ -8,6 +8,7 @@ import { Sidebar } from '@/app/components/Sidebar';
 import type { ChatMessage } from '@/app/lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Menu, User, X } from 'lucide-react';
+import { LoadingMessage } from '@/app/components/LoadingMessage';
 
 const SUGGESTION_CARDS = [
   { id: 1, title: 'Write a blog post', prompt: 'Write a blog post about the future of AI in web development' },
@@ -33,6 +34,7 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  
   // Check Login & Load URL Session on Mount
   useEffect(() => {
     fetch('/api/history').then(res => {
@@ -144,6 +146,8 @@ export default function Home() {
     return 'Good evening';
   };
 
+  
+
   return (
     <div className="flex h-screen bg-white text-gray-900 font-sans overflow-hidden">
       {/* Sidebar - Desktop & Mobile */}
@@ -166,7 +170,7 @@ export default function Home() {
               {isLoggedIn && (
                 <button
                   onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="md:hidden p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+                  className="md:hidden p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors shrink-0"
                   aria-label="Toggle menu"
                 >
                   {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
@@ -180,12 +184,12 @@ export default function Home() {
             {!isLoggedIn ? (
               <a 
                 href="/login" 
-                className="px-3 sm:px-4 py-1.5 sm:py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 active:bg-violet-800 text-xs sm:text-sm font-medium transition-colors shadow-sm flex-shrink-0"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 active:bg-violet-800 text-xs sm:text-sm font-medium transition-colors shadow-sm shrink-0"
               >
                 Log in
               </a>
             ) : (
-              <button className="p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors flex-shrink-0">
+              <button className="p-1.5 sm:p-2 hover:bg-gray-100 active:bg-gray-200 rounded-full transition-colors shrink-0">
                 <User size={18} className="sm:w-5 sm:h-5 text-gray-600" />
               </button>
             )}
@@ -208,7 +212,7 @@ export default function Home() {
                 {/* Gradient Greeting */}
                 <div className="text-center mb-8 sm:mb-12">
                   <motion.h1 
-                    className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-600 bg-clip-text text-transparent px-4"
+                    className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 bg-linear-to-r from-violet-600 via-indigo-600 to-violet-600 bg-clip-text text-transparent px-4"
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.1, duration: 0.5 }}
@@ -222,7 +226,7 @@ export default function Home() {
                     transition={{ delay: 0.3 }}
                   >
                     <Sparkles size={16} className="sm:w-5 sm:h-5 text-violet-500" />
-                    How can I help you today?
+                    Ask me anything
                   </motion.p>
                 </div>
 
@@ -271,6 +275,12 @@ export default function Home() {
                   {messages.map((msg, index) => (
                     <MessageBubble key={index} message={msg} />
                   ))}
+                  
+                  {/* Show loading animation when AI is responding */}
+                  {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+                    <LoadingMessage />
+                  )}
+                  
                   <div ref={messagesEndRef} />
                 </div>
 
