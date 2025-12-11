@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     // 3. Build Context (Only Last 2 Messages + Current)
     const recentHistory = await getRecentMessages(sessionId, 2);
     
-    const systemPrompt = `You are a helpful blog-writing assistant. Answer the user's question in a detailed, structured format (like a mini-blog post) using Markdown.`;
+    const systemPrompt = `You are a helpful blog-writing assistant. Answer the user's question in a detailed, structured format (like a mini-blog post) using Markdown.,but also be able to anser short qustion aswell if he is asking he is greeting or asking queestion outside of a paricalu topic , also mention you are moslty a blog writing ai tool `;
     const contextString = recentHistory.map(m => `${m.role}: ${m.content}`).join('\n');
     const finalPrompt = `${systemPrompt}\n\nRecent Context:\n${contextString}\n\nUser: ${message}\nAssistant:`;
 

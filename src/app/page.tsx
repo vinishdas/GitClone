@@ -1,20 +1,38 @@
-'use client';
+// src/app/page.tsx
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { MessageBubble } from '@/app/components/MessageBubble';
-import { ChatInput } from '@/app/components/ChatInput';
-import { Sidebar } from '@/app/components/Sidebar';
-import type { ChatMessage } from '@/app/lib/types';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Menu, User, X } from 'lucide-react';
-import { LoadingMessage } from '@/app/components/LoadingMessage';
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { MessageBubble } from "@/app/components/MessageBubble";
+import { ChatInput } from "@/app/components/ChatInput";
+import { Sidebar } from "@/app/components/Sidebar";
+import type { ChatMessage } from "@/app/lib/types";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles, Menu, User, X } from "lucide-react";
+import { LoadingMessage } from "@/app/components/LoadingMessage";
+import { SparklesText } from "@/app/components/ui/sparkles-text";
 
 const SUGGESTION_CARDS = [
-  { id: 1, title: 'Write a blog post', prompt: 'Write a blog post about the future of AI in web development' },
-  { id: 2, title: 'Explain quantum physics', prompt: 'Explain quantum physics in simple terms' },
-  { id: 3, title: 'Create a recipe', prompt: 'Create a healthy breakfast recipe with common ingredients' },
-  { id: 4, title: 'Debug my code', prompt: 'Help me debug a React component that won\'t re-render' },
+  {
+    id: 1,
+    title: "Write a blog post",
+    prompt: "Write a blog post about the future of AI in web development",
+  },
+  {
+    id: 2,
+    title: "Explain quantum physics",
+    prompt: "Explain quantum physics in simple terms",
+  },
+  {
+    id: 3,
+    title: "Create a recipe",
+    prompt: "Create a healthy breakfast recipe with common ingredients",
+  },
+  {
+    id: 4,
+    title: "Debug my code",
+    prompt: "Help me debug a React component that won't re-render",
+  },
 ];
 
 export default function Home() {
@@ -23,7 +41,7 @@ export default function Home() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sessionTitle, setSessionTitle] = useState('New Chat');
+  const [sessionTitle, setSessionTitle] = useState("New Chat");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const searchParams = useSearchParams();
@@ -31,17 +49,16 @@ export default function Home() {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  
   // Check Login & Load URL Session on Mount
   useEffect(() => {
-    fetch('/api/history').then(res => {
+    fetch("/api/history").then((res) => {
       if (res.ok) setIsLoggedIn(true);
     });
 
-    const urlSessionId = searchParams.get('c');
+    const urlSessionId = searchParams.get("c");
     if (urlSessionId) {
       handleSelectSession(urlSessionId);
     }
@@ -49,37 +66,43 @@ export default function Home() {
 
   const handleSendMessage = async (content: string) => {
     setIsLoading(true);
-    const userMessage: ChatMessage = { role: 'user', content };
+    const userMessage: ChatMessage = { role: "user", content };
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: content, 
-          sessionId: currentSessionId 
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: content,
+          sessionId: currentSessionId,
         }),
       });
 
       if (response.status === 429) {
-        setMessages(prev => [...prev, { role: 'assistant', content: "You're typing too fast! Please wait a moment." }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "You're typing too fast! Please wait a moment.",
+          },
+        ]);
         setIsLoading(false);
         return;
       }
 
-      const newSessionHeader = response.headers.get('x-session-id');
+      const newSessionHeader = response.headers.get("x-session-id");
       if (newSessionHeader && !currentSessionId) {
         setCurrentSessionId(newSessionHeader);
         router.push(`/?c=${newSessionHeader}`, { scroll: false });
       }
 
-      if (!response.body) throw new Error('No response');
+      if (!response.body) throw new Error("No response");
 
-      setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let assistantText = '';
+      let assistantText = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -96,7 +119,9 @@ export default function Home() {
 
       // Update session title with first user message
       if (messages.length === 0) {
-        setSessionTitle(content.slice(0, 50) + (content.length > 50 ? '...' : ''));
+        setSessionTitle(
+          content.slice(0, 50) + (content.length > 50 ? "..." : "")
+        );
       }
     } catch (error) {
       console.error(error);
@@ -107,18 +132,23 @@ export default function Home() {
 
   const handleSelectSession = async (sessionId: string) => {
     setCurrentSessionId(sessionId);
-    router.push(`/?c=${sessionId}`); 
+    router.push(`/?c=${sessionId}`);
     setIsLoading(true);
-    setMessages([]); 
-    
+    setMessages([]);
+
     try {
       const res = await fetch(`/api/chat/${sessionId}`);
       const data = await res.json();
       if (data.messages) {
         setMessages(data.messages);
-        const firstUserMsg = data.messages.find((m: ChatMessage) => m.role === 'user');
+        const firstUserMsg = data.messages.find(
+          (m: ChatMessage) => m.role === "user"
+        );
         if (firstUserMsg) {
-          setSessionTitle(firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? '...' : ''));
+          setSessionTitle(
+            firstUserMsg.content.slice(0, 50) +
+              (firstUserMsg.content.length > 50 ? "..." : "")
+          );
         }
       }
     } catch (e) {
@@ -131,8 +161,8 @@ export default function Home() {
   const handleNewChat = () => {
     setCurrentSessionId(null);
     setMessages([]);
-    setSessionTitle('New Chat');
-    router.push('/');
+    setSessionTitle("New Chat");
+    router.push("/");
   };
 
   const handleSuggestionClick = (prompt: string) => {
@@ -141,20 +171,18 @@ export default function Home() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
   };
-
-  
 
   return (
     <div className="flex h-screen bg-white text-gray-900 font-sans overflow-hidden">
       {/* Sidebar - Desktop & Mobile */}
       {isLoggedIn && (
-        <Sidebar 
-          onSelectSession={handleSelectSession} 
-          onNewChat={handleNewChat} 
+        <Sidebar
+          onSelectSession={handleSelectSession}
+          onNewChat={handleNewChat}
           currentSessionId={currentSessionId}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -164,7 +192,7 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative overflow-hidden w-full">
         {/* Top Navigation Bar */}
-        <div className="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-gray-100">
+        <div className="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
           <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3">
             <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
               {isLoggedIn && (
@@ -181,9 +209,15 @@ export default function Home() {
               </h2>
             </div>
 
+            <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
+              <span className="text-sm sm:text-3xl font-bold bg-gradient-to-r from-violet-500 to-pink-400 text-transparent bg-clip-text">
+                Storyspark
+              </span>
+            </div>
+
             {!isLoggedIn ? (
-              <a 
-                href="/login" 
+              <a
+                href="/login"
                 className="px-3 sm:px-4 py-1.5 sm:py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 active:bg-violet-800 text-xs sm:text-sm font-medium transition-colors shadow-sm shrink-0"
               >
                 Log in
@@ -201,7 +235,7 @@ export default function Home() {
           <AnimatePresence mode="wait">
             {messages.length === 0 ? (
               /* HERO STATE */
-              <motion.div 
+              <motion.div
                 key="hero"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -211,27 +245,34 @@ export default function Home() {
               >
                 {/* Gradient Greeting */}
                 <div className="text-center mb-8 sm:mb-12">
-                  <motion.h1 
-                    className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 bg-linear-to-r from-violet-600 via-indigo-600 to-violet-600 bg-clip-text text-transparent px-4"
+                  <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.1, duration: 0.5 }}
                   >
-                    {getGreeting()}
-                  </motion.h1>
-                  <motion.p 
+                    <SparklesText
+                      text={getGreeting()}
+                      className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 text-violet-600 px-4 pb-2"
+                      colors={{ first: "#7c3aed", second: "#4f46e5" }}
+                      sparklesCount={10}
+                    />
+                  </motion.div>
+                  <motion.p
                     className="text-base sm:text-lg md:text-xl text-gray-500 flex items-center justify-center gap-2"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.3 }}
                   >
-                    <Sparkles size={16} className="sm:w-5 sm:h-5 text-violet-500" />
+                    <Sparkles
+                      size={16}
+                      className="sm:w-5 sm:h-5 text-violet-500"
+                    />
                     Ask me anything
                   </motion.p>
                 </div>
 
                 {/* Suggestion Cards */}
-                <motion.div 
+                <motion.div
                   className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full max-w-3xl mb-6 sm:mb-8 px-2"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -257,7 +298,10 @@ export default function Home() {
 
                 {/* Chat Input */}
                 <div className="w-full max-w-3xl  ">
-                  <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+                  <ChatInput
+                    onSendMessage={handleSendMessage}
+                    isLoading={isLoading}
+                  />
                 </div>
               </motion.div>
             ) : (
@@ -275,18 +319,23 @@ export default function Home() {
                   {messages.map((msg, index) => (
                     <MessageBubble key={index} message={msg} />
                   ))}
-                  
+
                   {/* Show loading animation when AI is responding */}
-                  {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
-                    <LoadingMessage />
-                  )}
-                  
+                  {isLoading &&
+                    messages.length > 0 &&
+                    messages[messages.length - 1].role === "user" && (
+                      <LoadingMessage />
+                    )}
+
                   <div ref={messagesEndRef} />
                 </div>
 
                 {/* Fixed Input at Bottom */}
                 <div className=" border-none  bg-transparent  ">
-                  <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+                  <ChatInput
+                    onSendMessage={handleSendMessage}
+                    isLoading={isLoading}
+                  />
                 </div>
               </motion.div>
             )}

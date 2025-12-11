@@ -67,6 +67,7 @@ export function Sidebar({ onSelectSession, onNewChat, currentSessionId, isOpen =
       await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/login'); 
       router.refresh(); 
+       window.location.reload();
     } catch (error) {
       console.error('Logout failed:', error);
     }
