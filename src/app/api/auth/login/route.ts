@@ -3,6 +3,8 @@ import { prisma } from '@/app/lib/prisma';
 import { comparePassword, signToken } from '@/app/lib/auth';
 import { z } from 'zod';
 
+// [!code ++] Add this line to force dynamic rendering and skip static data collection
+export const dynamic = 'force-dynamic';
 
 const loginSchema = z.object({
   email: z.string().email(),
