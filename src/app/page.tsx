@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { MessageBubble } from "@/app/components/MessageBubble";
 import { ChatInput } from "@/app/components/ChatInput";
@@ -35,7 +35,8 @@ const SUGGESTION_CARDS = [
   },
 ];
 
-export default function Home() {
+// Renamed original Home to ChatContent to be wrapped by Suspense
+function ChatContent() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -343,5 +344,14 @@ export default function Home() {
         </div>
       </main>
     </div>
+  );
+}
+
+// Export the wrapper that includes Suspense
+export default function HomeWrapper() {
+  return (
+    <Suspense fallback={<div>Loading chat interface...</div>}>
+      <ChatContent />
+    </Suspense>
   );
 }
