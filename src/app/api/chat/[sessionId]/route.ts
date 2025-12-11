@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { verifyToken } from '@/app/lib/auth';
 
+// [!code ++] Add this line to force dynamic rendering and skip static data collection
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
@@ -54,7 +57,8 @@ export async function GET(
 
 // ... existing imports ...
 
-// [!code ++] ADD THIS FUNCTION
+// [!code ++] ADD THIS EXPORT CONST DYNAMIC IF YOU DELETED THE PREVIOUS ONE (KEEP ONLY ONE AT THE TOP)
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }

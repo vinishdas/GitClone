@@ -6,7 +6,7 @@ import { verifyToken } from '@/app/lib/jwt';
 import { prisma } from '@/app/lib/prisma';
 import type { ChatRequest, ChatMessage } from '@/app/lib/types';
 import { checkRateLimit } from '@/app/lib/rateLimitStore';
-
+export const dynamic = 'force-dynamic';
 interface ChatRequestBody {
   message: string;
   sessionId?: string;
